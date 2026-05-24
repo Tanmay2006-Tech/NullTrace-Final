@@ -37,8 +37,7 @@ export default function DashboardPage() {
   } = useGetIncidentSummary({
     query: {
       queryKey:
-        getGetIncidentSummaryQueryKey?.() ||
-        [],
+        getGetIncidentSummaryQueryKey?.() || [],
     },
   });
 
@@ -48,8 +47,7 @@ export default function DashboardPage() {
   } = useGetHealthScore({
     query: {
       queryKey:
-        getGetHealthScoreQueryKey?.() ||
-        [],
+        getGetHealthScoreQueryKey?.() || [],
     },
   });
 
@@ -59,8 +57,7 @@ export default function DashboardPage() {
   } = useGetAiInsights({
     query: {
       queryKey:
-        getGetAiInsightsQueryKey?.() ||
-        [],
+        getGetAiInsightsQueryKey?.() || [],
     },
   });
 
@@ -70,9 +67,7 @@ export default function DashboardPage() {
   } = useListServices({
     query: {
       queryKey:
-        getListServicesQueryKey?.() ||
-        [],
-
+        getListServicesQueryKey?.() || [],
       refetchInterval: 10000,
     },
   });
@@ -83,13 +78,12 @@ export default function DashboardPage() {
   } = useGetHeatmap({
     query: {
       queryKey:
-        getGetHeatmapQueryKey?.() ||
-        [],
+        getGetHeatmapQueryKey?.() || [],
     },
   });
 
   const score =
-    healthData?.score || 100;
+    Number(healthData?.score) || 100;
 
   const scoreColor =
     score >= 85
@@ -101,6 +95,22 @@ export default function DashboardPage() {
   const incidentSeverity =
     summary?.incident?.severity ||
     "MEDIUM";
+
+  const affectedServices = Array.isArray(
+    summary?.analysis?.affectedServices
+  )
+    ? summary.analysis.affectedServices
+    : [];
+
+  const suggestedCommands = Array.isArray(
+    summary?.analysis?.suggestedCommands
+  )
+    ? summary.analysis.suggestedCommands
+    : [];
+
+  const safeInsights = Array.isArray(insights)
+    ? insights
+    : [];
 
   return (
     <MainLayout>
@@ -114,14 +124,11 @@ export default function DashboardPage() {
         ) : summary ? (
           <div
             className={`glass-card rounded-xl p-6 ${
-              incidentSeverity ===
-              "CRITICAL"
+              incidentSeverity === "CRITICAL"
                 ? "neon-border-red"
-                : incidentSeverity ===
-                  "HIGH"
+                : incidentSeverity === "HIGH"
                 ? "neon-border-orange"
-                : incidentSeverity ===
-                  "MEDIUM"
+                : incidentSeverity === "MEDIUM"
                 ? "neon-border-yellow"
                 : "neon-border-blue"
             }`}
@@ -134,8 +141,7 @@ export default function DashboardPage() {
 
                 <div>
                   <h2 className="text-xl font-bold">
-                    {summary?.incident
-                      ?.title ||
+                    {summary?.incident?.title ||
                       "Unknown Incident"}
                   </h2>
 
@@ -182,14 +188,8 @@ export default function DashboardPage() {
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {Array.isArray(
-                    summary?.analysis
-                      ?.affectedServices
-                  ) &&
-                  summary.analysis
-                    .affectedServices
-                    .length > 0 ? (
-                    summary.analysis.affectedServices.map(
+                  {affectedServices.length > 0 ? (
+                    affectedServices.map(
                       (svc: string) => (
                         <Badge
                           key={svc}
@@ -212,26 +212,20 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="bg-black/90 rounded-lg p-4 border border-border font-mono text-sm relative group">
+              <div className="bg-black/90 rounded-lg p-4 border border-border font-mono text-sm relative">
                 <div className="absolute top-2 right-2 text-xs text-muted-foreground">
                   Suggested Fix
                 </div>
 
                 <div className="text-green-400 mt-4 space-y-1">
-                  {Array.isArray(
-                    summary?.analysis
-                      ?.suggestedCommands
-                  ) &&
-                  summary.analysis
-                    .suggestedCommands
-                    .length > 0 ? (
-                    summary.analysis.suggestedCommands.map(
+                  {suggestedCommands.length > 0 ? (
+                    suggestedCommands.map(
                       (
                         cmd: string,
                         i: number
                       ) => (
                         <div key={i}>
-                          <span className="text-muted-foreground select-none">
+                          <span className="text-muted-foreground">
                             $
                           </span>{" "}
                           {cmd}
@@ -240,8 +234,7 @@ export default function DashboardPage() {
                     )
                   ) : (
                     <div>
-                      No commands
-                      available
+                      No commands available
                     </div>
                   )}
                 </div>
@@ -257,9 +250,8 @@ export default function DashboardPage() {
             </h2>
 
             <p className="text-muted-foreground">
-              No critical incidents
-              require attention at this
-              time.
+              No critical incidents require
+              attention at this time.
             </p>
           </div>
         )}
@@ -293,17 +285,13 @@ export default function DashboardPage() {
                     stroke="currentColor"
                     strokeWidth="8"
                     strokeDasharray={
-                      2 *
-                      Math.PI *
-                      56
+                      2 * Math.PI * 56
                     }
                     strokeDashoffset={
                       2 *
                       Math.PI *
                       56 *
-                      (1 -
-                        score /
-                          100)
+                      (1 - score / 100)
                     }
                     className={`${scoreColor} transition-all duration-1000 ease-in-out`}
                   />
@@ -336,55 +324,45 @@ export default function DashboardPage() {
                     className="h-12 w-full rounded"
                   />
                 ))
-              ) : Array.isArray(
-                  insights
-                ) &&
-                insights.length >
-                  0 ? (
-                insights
+              ) : safeInsights.length > 0 ? (
+                safeInsights
                   .slice(0, 3)
-                  .map(
-                    (
-                      insight: any
-                    ) => (
-                      <div
-                        key={
-                          insight?.id ||
-                          Math.random()
-                        }
-                        className="flex gap-3 items-center bg-background/40 p-3 rounded border border-border"
-                      >
-                        <div className="p-1.5 bg-primary/10 rounded text-primary shrink-0">
-                          <Activity className="h-4 w-4" />
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm truncate text-foreground">
-                            {insight?.message ||
-                              "No message"}
-                          </p>
-
-                          <p className="text-xs text-muted-foreground">
-                            {insight?.service ||
-                              "Unknown"}{" "}
-                            •{" "}
-                            {insight?.timestamp
-                              ? format(
-                                  new Date(
-                                    insight.timestamp
-                                  ),
-                                  "h:mm a"
-                                )
-                              : "Unknown"}
-                          </p>
-                        </div>
+                  .map((insight: any, i: number) => (
+                    <div
+                      key={
+                        insight?.id || i
+                      }
+                      className="flex gap-3 items-center bg-background/40 p-3 rounded border border-border"
+                    >
+                      <div className="p-1.5 bg-primary/10 rounded text-primary shrink-0">
+                        <Activity className="h-4 w-4" />
                       </div>
-                    )
-                  )
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate text-foreground">
+                          {insight?.message ||
+                            "No message"}
+                        </p>
+
+                        <p className="text-xs text-muted-foreground">
+                          {insight?.service ||
+                            "Unknown"}{" "}
+                          •{" "}
+                          {insight?.timestamp
+                            ? format(
+                                new Date(
+                                  insight.timestamp
+                                ),
+                                "h:mm a"
+                              )
+                            : "Unknown"}
+                        </p>
+                      </div>
+                    </div>
+                  ))
               ) : (
                 <div className="text-sm text-muted-foreground text-center py-4">
-                  No recent
-                  insights.
+                  No recent insights.
                 </div>
               )}
             </div>

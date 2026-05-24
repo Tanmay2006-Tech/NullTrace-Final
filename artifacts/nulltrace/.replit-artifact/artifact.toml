@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "NullTrace AI Platform"
+version = "1.0.0"
+id = "artifacts/nulltrace"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23099
+
+[services.development]
+run = "pnpm --filter @workspace/nulltrace run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/nulltrace", "run", "build" ]
+publicDir = "artifacts/nulltrace/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23099"
+BASE_PATH = "/"

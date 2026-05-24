@@ -1,0 +1,375 @@
+Keep the entire existing NullTrace structure, UI, routing, layout, pages, theme, and design system exactly the same.
+
+DO NOT redesign the application.
+
+The goal is to UPGRADE the current platform with advanced AI-powered observability features while keeping the project:
+
+* lightweight
+* scalable
+* production-ready
+* fully functional
+* optimized for FREE deployment on Vercel
+
+The project MUST remain:
+
+* Vercel compatible
+* frontend/backend deployable for free
+* environment-variable friendly
+* optimized for low resource usage
+* easy to run locally and online
+
+Use mock APIs and simulated infrastructure data where necessary to avoid expensive services.
+
+# VERY IMPORTANT
+
+Everything added must WORK realistically.
+Do not generate static fake UI only.
+
+Use:
+
+* dynamic mock APIs
+* simulated logs
+* real-time metric updates
+* AI-powered analysis prompts
+* live state updates
+* local/mock infrastructure datasets
+
+The platform should feel like a real SaaS observability product.
+
+---
+
+# ADD THIS FEATURE FIRST
+
+# AI ROOT CAUSE ANALYSIS ENGINE
+
+Create a fully working AI Root Cause Analysis system.
+
+When incidents occur, the AI should analyze:
+
+* logs
+* metrics
+* affected services
+* timestamps
+* error patterns
+* dependencies
+
+Then dynamically generate:
+
+## Root Cause
+
+Example:
+“PostgreSQL connection pool exhaustion caused authentication service timeout.”
+
+## Why The Error Happened
+
+Example:
+“Too many concurrent database requests overloaded the connection pool, causing delayed responses and API timeout failures.”
+
+## Suggested Solutions
+
+Example:
+
+* Restart deployment
+* Increase DB connection pool size
+* Scale replicas
+* Optimize slow queries
+
+## Human-Friendly Explanation
+
+Example:
+“The database became overloaded due to high traffic, which caused dependent services to stop responding properly.”
+
+## Confidence Score
+
+Example:
+“Confidence: 92%”
+
+## Severity Prediction
+
+* LOW
+* MEDIUM
+* HIGH
+* CRITICAL
+
+This feature must work dynamically using:
+
+* AI prompts
+* mock infrastructure logs
+* backend analysis
+* generated incidents
+
+Display AI RCA inside:
+
+* dashboard hero card
+* incidents page
+* incident detail modal
+* AI chat assistant
+
+---
+
+# KEEP EXISTING STRUCTURE BUT ADD THESE FEATURES
+
+## 1. AI Incident Summary Hero Card
+
+Add a large AI-generated incident card on top dashboard area.
+
+Include:
+
+* root cause
+* affected services
+* severity
+* confidence score
+* suggested remediation
+
+Make this the centerpiece of the dashboard.
+
+---
+
+## 2. Incident Detail Modal / Drawer
+
+When clicking incidents:
+open detailed RCA panel containing:
+
+* AI analysis
+* timeline
+* logs
+* affected services
+* remediation steps
+* suggested commands
+* severity
+* confidence score
+
+Keep current UI design.
+
+---
+
+## 3. AI Timeline Reconstruction
+
+Generate incident timeline dynamically from logs:
+
+2:04 PM → DB latency spike
+2:05 PM → Auth timeout
+2:06 PM → API failures
+2:07 PM → Checkout outage
+
+Use animated vertical timeline.
+
+---
+
+## 4. AI Suggested Commands
+
+Show remediation commands in terminal UI:
+
+```bash id="lf1azs"
+kubectl rollout restart deployment checkout-service
+```
+
+```bash id="8rpxom"
+kubectl scale deployment auth-service --replicas=5
+```
+
+Add:
+
+* copy button
+* syntax highlighting
+* terminal styling
+
+---
+
+## 5. Real-Time AI Insights
+
+Add AI insight cards:
+
+* “Memory usage increased 34% before outage.”
+* “Repeated auth failures detected.”
+* “API latency exceeded threshold.”
+
+Generate insights dynamically.
+
+---
+
+## 6. Improve AI Chat Experience
+
+Keep same page structure but enhance functionality:
+
+* streaming responses
+* markdown rendering
+* code blocks
+* typing animation
+* suggested prompts
+* infrastructure-aware responses
+
+Suggested prompts:
+
+* Why did checkout fail?
+* Which service is unstable?
+* Explain latest outage.
+* Show failed pods.
+* Suggest solution for DB timeout.
+
+---
+
+## 7. Live Infrastructure Simulation
+
+Add realistic simulated infrastructure behavior:
+
+* changing CPU usage
+* fluctuating memory
+* live logs
+* random incidents
+* blinking LIVE indicators
+
+The app should feel alive.
+
+---
+
+## 8. Animated Live Logs
+
+Enhance current logs:
+
+* auto-scroll
+* blinking cursor
+* severity highlighting
+* timestamps
+* AI anomaly highlighting
+
+---
+
+## 9. Infrastructure Health Score
+
+Add:
+“System Health: 84%”
+
+Use:
+
+* animated circular progress
+* dynamic updates
+
+---
+
+## 10. Incident Severity Heatmap
+
+Create heatmap showing:
+
+* unstable services
+* outage density
+* error hotspots
+
+Keep minimal and modern.
+
+---
+
+# VERCEL DEPLOYMENT REQUIREMENTS
+
+The project MUST be fully optimized for FREE deployment.
+
+# Frontend
+
+Deploy frontend on:
+
+* Vercel
+
+Requirements:
+
+* vite.config optimization
+* environment variable support
+* responsive build
+* fast loading
+* production-ready routing
+
+# Backend
+
+Backend must support:
+
+* Vercel serverless functions
+  OR
+* lightweight FastAPI deployment
+  OR
+* mock API fallback if backend unavailable
+
+Avoid expensive infrastructure.
+
+---
+
+# USE FREE & LIGHTWEIGHT SOLUTIONS ONLY
+
+Use:
+
+* mock observability data
+* simulated logs
+* local AI prompts
+* lightweight backend APIs
+* local JSON datasets where possible
+
+Avoid:
+
+* paid cloud services
+* expensive APIs
+* heavy infrastructure requirements
+
+---
+
+# TECH REQUIREMENTS
+
+Frontend:
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+* shadcn/ui
+* Framer Motion
+* Recharts
+
+Backend:
+
+* FastAPI or lightweight Node backend
+* WebSocket simulation
+* API routes optimized for Vercel
+
+AI:
+
+* OpenAI integration optional
+* fallback local AI analysis system
+* prompt-based incident analysis
+
+---
+
+# DESIGN REQUIREMENTS
+
+Maintain current:
+
+* dark futuristic observability theme
+* neon blue/purple accents
+* glassmorphism cards
+* SaaS dashboard aesthetic
+
+Enhance using:
+
+* subtle glow
+* smooth transitions
+* animated live indicators
+* terminal-style UI
+* modern observability visuals
+
+DO NOT overcrowd the interface.
+
+---
+
+# FINAL GOAL
+
+The upgraded NullTrace platform should feel like:
+
+* a real AI-powered enterprise observability product
+* combining Grafana + Datadog + AI intelligence
+* optimized for real-time infrastructure debugging
+
+while still:
+
+* lightweight
+* fast
+* deployable for free
+* Vercel-ready
+* scalable
+* visually impressive
+* fully functional

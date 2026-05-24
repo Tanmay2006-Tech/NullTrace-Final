@@ -1,0 +1,769 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: NullTrace AI DevOps Observability Platform API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: incidents
+    description: Incident management
+  - name: services
+    description: Service health
+  - name: metrics
+    description: Infrastructure metrics
+  - name: logs
+    description: Log management
+  - name: ai
+    description: AI analysis and chat
+  - name: pods
+    description: Pod health
+  - name: heatmap
+    description: Incident heatmap
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /incidents:
+    get:
+      operationId: listIncidents
+      tags: [incidents]
+      summary: List all incidents
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ListIncidentsStatus"
+        - name: severity
+          in: query
+          schema:
+            $ref: "#/components/schemas/ListIncidentsSeverity"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of incidents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Incident"
+
+    post:
+      operationId: createIncident
+      tags: [incidents]
+      summary: Create a new incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentInput"
+      responses:
+        "201":
+          description: Created incident
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+
+  /incidents/summary:
+    get:
+      operationId: getIncidentSummary
+      tags: [incidents]
+      summary: Get AI-powered incident summary and RCA for latest critical incident
+      responses:
+        "200":
+          description: Latest incident summary with AI analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentSummary"
+
+  /incidents/{id}:
+    get:
+      operationId: getIncident
+      tags: [incidents]
+      summary: Get incident by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Incident details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updateIncident
+      tags: [incidents]
+      summary: Update an incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentUpdate"
+      responses:
+        "200":
+          description: Updated incident
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "404":
+          description: Not found
+
+  /incidents/{id}/rca:
+    post:
+      operationId: analyzeIncident
+      tags: [incidents]
+      summary: Run AI root cause analysis on an incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: AI root cause analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResult"
+
+  /incidents/{id}/timeline:
+    get:
+      operationId: getIncidentTimeline
+      tags: [incidents]
+      summary: Get timeline events for an incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Timeline events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineEvent"
+
+  /services:
+    get:
+      operationId: listServices
+      tags: [services]
+      summary: List all services with health status
+      responses:
+        "200":
+          description: List of services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Service"
+
+  /metrics:
+    get:
+      operationId: getMetrics
+      tags: [metrics]
+      summary: Get infrastructure metrics
+      parameters:
+        - name: range
+          in: query
+          schema:
+            $ref: "#/components/schemas/GetMetricsRange"
+          description: Time range for metrics (1h, 6h, 24h)
+        - name: service
+          in: query
+          schema:
+            type: string
+          description: Filter by service name
+      responses:
+        "200":
+          description: Metrics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsData"
+
+  /metrics/health-score:
+    get:
+      operationId: getHealthScore
+      tags: [metrics]
+      summary: Get overall system health score
+      responses:
+        "200":
+          description: System health score
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  score:
+                    type: integer
+                  trend:
+                    type: string
+                  components:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        score:
+                          type: integer
+                        status:
+                          type: string
+                      required: [name, score, status]
+                required: [score, trend, components]
+
+  /logs:
+    get:
+      operationId: listLogs
+      tags: [logs]
+      summary: Get live logs stream
+      parameters:
+        - name: level
+          in: query
+          schema:
+            $ref: "#/components/schemas/ListLogsLevel"
+        - name: service
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LogEntry"
+
+  /logs/analyze:
+    post:
+      operationId: analyzeLogs
+      tags: [logs]
+      summary: AI analysis of log patterns
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogAnalysisInput"
+      responses:
+        "200":
+          description: Log analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResult"
+
+  /ai/chat:
+    post:
+      operationId: aiChat
+      tags: [ai]
+      summary: Chat with AI assistant about infrastructure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatInput"
+      responses:
+        "200":
+          description: AI chat response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+
+  /ai/insights:
+    get:
+      operationId: getAiInsights
+      tags: [ai]
+      summary: Get real-time AI-generated insights about infrastructure
+      responses:
+        "200":
+          description: AI insights
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    message:
+                      type: string
+                    severity:
+                      type: string
+                    service:
+                      type: string
+                    timestamp:
+                      type: string
+                  required: [id, message, severity, service, timestamp]
+
+  /pods:
+    get:
+      operationId: listPods
+      tags: [pods]
+      summary: List all pods with health status
+      responses:
+        "200":
+          description: List of pods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PodHealth"
+
+  /heatmap:
+    get:
+      operationId: getHeatmap
+      tags: [heatmap]
+      summary: Get incident severity heatmap data
+      responses:
+        "200":
+          description: Heatmap data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HeatmapEntry"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    IncidentSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    IncidentStatus:
+      type: string
+      enum: [OPEN, INVESTIGATING, RESOLVED, CLOSED]
+
+    ListIncidentsStatus:
+      type: string
+      enum: [OPEN, INVESTIGATING, RESOLVED, CLOSED]
+
+    ListIncidentsSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    Incident:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          $ref: "#/components/schemas/IncidentSeverity"
+        status:
+          $ref: "#/components/schemas/IncidentStatus"
+        affectedServices:
+          type: array
+          items:
+            type: string
+        rootCause:
+          type: ["string", "null"]
+        aiAnalysis:
+          type: ["string", "null"]
+        confidence:
+          type: ["integer", "null"]
+        suggestedCommands:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        resolvedAt:
+          type: ["string", "null"]
+      required:
+        - id
+        - title
+        - description
+        - severity
+        - status
+        - affectedServices
+        - suggestedCommands
+        - createdAt
+        - updatedAt
+
+    IncidentInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          $ref: "#/components/schemas/IncidentSeverity"
+        affectedServices:
+          type: array
+          items:
+            type: string
+      required: [title, description, severity, affectedServices]
+
+    IncidentUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          $ref: "#/components/schemas/IncidentUpdateSeverity"
+        status:
+          $ref: "#/components/schemas/IncidentUpdateStatus"
+        rootCause:
+          type: string
+        aiAnalysis:
+          type: string
+        confidence:
+          type: integer
+
+    IncidentUpdateSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    IncidentUpdateStatus:
+      type: string
+      enum: [OPEN, INVESTIGATING, RESOLVED, CLOSED]
+
+    IncidentSummary:
+      type: object
+      properties:
+        incident:
+          $ref: "#/components/schemas/Incident"
+        analysis:
+          $ref: "#/components/schemas/AnalysisResult"
+        timeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEvent"
+      required: [incident, analysis, timeline]
+
+    AnalysisResult:
+      type: object
+      properties:
+        rootCause:
+          type: string
+        whyItHappened:
+          type: string
+        humanExplanation:
+          type: string
+        suggestedSolutions:
+          type: array
+          items:
+            type: string
+        suggestedCommands:
+          type: array
+          items:
+            type: string
+        confidence:
+          type: integer
+        severity:
+          $ref: "#/components/schemas/IncidentSeverity"
+        affectedServices:
+          type: array
+          items:
+            type: string
+        insights:
+          type: array
+          items:
+            type: string
+      required:
+        - rootCause
+        - whyItHappened
+        - humanExplanation
+        - suggestedSolutions
+        - suggestedCommands
+        - confidence
+        - severity
+        - affectedServices
+        - insights
+
+    TimelineEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        incidentId:
+          type: integer
+        timestamp:
+          type: string
+        event:
+          type: string
+        type:
+          $ref: "#/components/schemas/TimelineEventType"
+        service:
+          type: ["string", "null"]
+      required: [id, incidentId, timestamp, event, type]
+
+    TimelineEventType:
+      type: string
+      enum: [DETECTION, ESCALATION, INVESTIGATION, MITIGATION, RESOLUTION, INFO]
+
+    ServiceStatus:
+      type: string
+      enum: [HEALTHY, DEGRADED, DOWN, UNKNOWN]
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/ServiceStatus"
+        cpu:
+          type: number
+        memory:
+          type: number
+        latency:
+          type: number
+        errorRate:
+          type: number
+        requestsPerSecond:
+          type: number
+        replicas:
+          type: integer
+        namespace:
+          type: string
+        lastUpdated:
+          type: string
+      required:
+        - id
+        - name
+        - status
+        - cpu
+        - memory
+        - latency
+        - errorRate
+        - requestsPerSecond
+        - replicas
+        - namespace
+        - lastUpdated
+
+    GetMetricsRange:
+      type: string
+      enum: ["1h", "6h", "24h"]
+
+    MetricsData:
+      type: object
+      properties:
+        cpu:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+              value:
+                type: number
+            required: [timestamp, value]
+        memory:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+              value:
+                type: number
+            required: [timestamp, value]
+        latency:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+              value:
+                type: number
+            required: [timestamp, value]
+        errorRate:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+              value:
+                type: number
+            required: [timestamp, value]
+        requestRate:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+              value:
+                type: number
+            required: [timestamp, value]
+      required: [cpu, memory, latency, errorRate, requestRate]
+
+    ListLogsLevel:
+      type: string
+      enum: [DEBUG, INFO, WARN, ERROR, FATAL]
+
+    LogEntryLevel:
+      type: string
+      enum: [DEBUG, INFO, WARN, ERROR, FATAL]
+
+    LogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: string
+        level:
+          $ref: "#/components/schemas/LogEntryLevel"
+        service:
+          type: string
+        message:
+          type: string
+        traceId:
+          type: ["string", "null"]
+        isAnomaly:
+          type: boolean
+      required: [id, timestamp, level, service, message, isAnomaly]
+
+    LogAnalysisInput:
+      type: object
+      properties:
+        logIds:
+          type: array
+          items:
+            type: integer
+        service:
+          type: string
+        timeRange:
+          type: string
+      required: [service]
+
+    ChatInput:
+      type: object
+      properties:
+        message:
+          type: string
+        conversationId:
+          type: ["string", "null"]
+      required: [message]
+
+    ChatResponse:
+      type: object
+      properties:
+        response:
+          type: string
+        conversationId:
+          type: string
+        suggestedPrompts:
+          type: array
+          items:
+            type: string
+      required: [response, conversationId, suggestedPrompts]
+
+    PodHealthStatus:
+      type: string
+      enum: [Running, Pending, CrashLoopBackOff, Error, Completed, Unknown]
+
+    PodHealth:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        namespace:
+          type: string
+        status:
+          $ref: "#/components/schemas/PodHealthStatus"
+        service:
+          type: string
+        cpu:
+          type: number
+        memory:
+          type: number
+        restarts:
+          type: integer
+        age:
+          type: string
+        node:
+          type: string
+      required: [id, name, namespace, status, service, cpu, memory, restarts, age, node]
+
+    HeatmapEntry:
+      type: object
+      properties:
+        service:
+          type: string
+        hour:
+          type: integer
+        incidentCount:
+          type: integer
+        severity:
+          type: string
+      required: [service, hour, incidentCount, severity]

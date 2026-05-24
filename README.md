@@ -56,8 +56,8 @@ NullTrace is a full-stack AI-powered DevOps observability platform built for mod
 
 | Field    | Value                  |
 |----------|------------------------|
-| Email    | `demo@nulltrace.io`    |
-| Password | `demo1234`             |
+| Email    | `Demouser@gmail.com`   |
+| Password | `NullTrace@123`        |
 
 On the sign-in page, click the **Demo Account** banner to auto-fill credentials instantly.
 

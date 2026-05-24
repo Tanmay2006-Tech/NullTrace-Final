@@ -5,22 +5,79 @@ import {
   ListIncidentsQueryParams,
   CreateIncidentBody,
   GetIncidentParams,
-  UpdateIncidentParams,
-  UpdateIncidentBody,
-  AnalyzeIncidentParams,
-  GetIncidentTimelineParams,
 } from "@workspace/api-zod";
 import { generateRCA } from "../lib/ai-analysis";
 
 const router: IRouter = Router();
 
+async function seedDemoIncidents() {
+  const existing = await db.select().from(incidentsTable);
+
+  if (existing.length > 0) return;
+
+  await db.insert(incidentsTable).values([
+    {
+      title: "Payment API Latency Spike",
+      description:
+        "Latency exceeded threshold across payment services",
+      severity: "CRITICAL",
+      status: "INVESTIGATING",
+      source: "Prometheus",
+      confidence: 94,
+      affectedServices: [
+        "payments-api",
+        "postgres-db",
+      ],
+      suggestedCommands: [
+        "kubectl rollout restart deployment/payments-api",
+      ],
+    },
+
+    {
+      title: "Redis Cache Miss Storm",
+      description:
+        "High cache miss ratio detected",
+      severity: "HIGH",
+      status: "MONITORING",
+      source: "Grafana",
+      confidence: 87,
+      affectedServices: [
+        "redis-cache",
+        "session-service",
+      ],
+      suggestedCommands: [
+        "redis-cli info memory",
+      ],
+    },
+
+    {
+      title: "Webhook Queue Saturation",
+      description:
+        "Webhook workers are delayed",
+      severity: "MEDIUM",
+      status: "IDENTIFIED",
+      source: "OpenTelemetry",
+      confidence: 76,
+      affectedServices: [
+        "webhook-worker",
+      ],
+      suggestedCommands: [
+        "pm2 restart webhook-worker",
+      ],
+    },
+  ]);
+}
+
 router.get("/incidents", async (req, res): Promise<void> => {
+  await seedDemoIncidents();
+
   const query = ListIncidentsQueryParams.safeParse(req.query);
 
   if (!query.success) {
     res.status(400).json({
       error: query?.error?.message || "Invalid query",
     });
+
     return;
   }
 
@@ -80,7 +137,9 @@ router.post("/incidents", async (req, res): Promise<void> => {
   const [incident] = await db
     .insert(incidentsTable)
     .values({
-      title: parsed?.data?.title || "Unknown Incident",
+      title:
+        parsed?.data?.title ||
+        "Unknown Incident",
 
       description:
         parsed?.data?.description ||
@@ -135,6 +194,8 @@ router.post("/incidents", async (req, res): Promise<void> => {
 router.get(
   "/incidents/summary",
   async (_req, res): Promise<void> => {
+    await seedDemoIncidents();
+
     const incidents =
       (await db.select().from(incidentsTable)) ||
       [];
@@ -149,16 +210,8 @@ router.get(
 
     const incident =
       critical.length > 0
-        ? critical.sort(
-            (a, b) =>
-              (b?.createdAt?.getTime?.() || 0) -
-              (a?.createdAt?.getTime?.() || 0)
-          )[0]
-        : incidents.sort(
-            (a, b) =>
-              (b?.createdAt?.getTime?.() || 0) -
-              (a?.createdAt?.getTime?.() || 0)
-          )[0];
+        ? critical[0]
+        : incidents[0];
 
     if (!incident) {
       res.status(404).json({

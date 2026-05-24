@@ -41,7 +41,7 @@ export default function IncidentsPage() {
 
   const filteredIncidents = incidents?.filter(incident => {
     if (statusFilter !== "ALL" && incident.status !== statusFilter) return false;
-    if (severityFilter !== "ALL" && incident.severity !== severityFilter) return false;
+    if (severityFilter !== "ALL" && incident?.severity !== severityFilter) return false;
     return true;
   });
 
@@ -140,7 +140,7 @@ export default function IncidentsPage() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell>{getSeverityBadge(incident.severity)}</TableCell>
+                    <TableCell>{getSeverityBadge(incident?.severity)}</TableCell>
                     <TableCell>{getStatusBadge(incident.status)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {format(new Date(incident.createdAt), "MMM d, h:mm a")}

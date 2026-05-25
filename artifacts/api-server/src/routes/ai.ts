@@ -208,9 +208,9 @@ kubectl logs deployment/api-server
         fullResponse += word + " ";
 
         res.write(
-          \`data: \${JSON.stringify({
+          `data: ${JSON.stringify({
             content: word + " ",
-          })}\n\n\`
+          })}\n\n`
         );
 
         await new Promise((resolve) =>
@@ -263,10 +263,10 @@ kubectl logs deployment/api-server
       }
 
       res.write(
-        \`data: \${JSON.stringify({
+        `data: ${JSON.stringify({
           done: true,
           conversationId: convId,
-        })}\n\n\`
+        })}\n\n`
       );
 
       res.end();
@@ -277,10 +277,10 @@ kubectl logs deployment/api-server
       );
 
       res.write(
-        \`data: \${JSON.stringify({
+        `data: ${JSON.stringify({
           error:
             "AI service temporarily unavailable",
-        })}\n\n\`
+        })}\n\n`
       );
 
       res.end();

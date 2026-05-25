@@ -8,6 +8,7 @@ export const incidentsTable = pgTable("incidents", {
   description: text("description").notNull(),
   severity: text("severity").notNull().default("MEDIUM"),
   status: text("status").notNull().default("OPEN"),
+  source: text("source"),
   affectedServices: jsonb("affected_services").notNull().$type<string[]>().default([]),
   rootCause: text("root_cause"),
   aiAnalysis: text("ai_analysis"),

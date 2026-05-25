@@ -2,6 +2,7 @@ import { MainLayout } from "@/components/MainLayout";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { API_URL } from "@/lib/api";
 import {
   BrainCircuit,
   Send,
@@ -117,7 +118,7 @@ export default function AiChatPage() {
     abortRef.current = new AbortController();
 
     try {
-      const res = await fetch("/api/ai/chat/stream", {
+      const res = await fetch(`${API_URL}/ai/chat/stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

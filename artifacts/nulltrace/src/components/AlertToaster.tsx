@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { API_URL } from "@/lib/api";
+import { apiPath } from "@/lib/api";
 import {
   AlertTriangle,
   X,
@@ -127,7 +127,7 @@ export function AlertToaster() {
   const autoFire = async () => {
     try {
       const res = await fetch(
-        `${API_URL}/monitoring/simulate`,
+        apiPath("/monitoring/simulate"),
         {
           method: "POST",
         }

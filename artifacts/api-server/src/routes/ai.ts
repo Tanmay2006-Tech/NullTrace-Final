@@ -194,27 +194,27 @@ async function handleStreamChat(
   req: Request,
   res: Response,
 ): Promise<void> {
-  const parsed = AiChatBody.safeParse(req.body);
-
-  if (!parsed.success) {
-    res.status(400).json({
-      error: parsed.error.message,
-    });
-    return;
-  }
-
-  const { message, conversationId } = parsed.data;
-  const convId = conversationId ?? randomUUID();
-  const existingMessages = conversationId
-    ? await loadConversation(conversationId)
-    : [];
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-
   try {
+    const parsed = AiChatBody.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.message,
+      });
+      return;
+    }
+
+    const { message, conversationId } = parsed.data;
+    const convId = conversationId ?? randomUUID();
+    const existingMessages = conversationId
+      ? await loadConversation(conversationId)
+      : [];
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+
     const fakeResponse = `
 # NullTrace AI Analysis
 
@@ -268,13 +268,21 @@ kubectl logs deployment/api-server
     );
     res.end();
   } catch (err) {
-    logger.error({ err }, "AI streaming failed");
-    res.write(
-      `data: ${JSON.stringify({
-        error: "AI service temporarily unavailable",
-      })}\n\n`,
-    );
-    res.end();
+    logger.error({ err, body: req.body }, "AI streaming failed");
+
+    if (res.headersSent) {
+      res.write(
+        `data: ${JSON.stringify({
+          error: "AI service temporarily unavailable",
+        })}\n\n`,
+      );
+      res.end();
+      return;
+    }
+
+    res.status(500).json({
+      error: "AI service temporarily unavailable",
+    });
   }
 }
 

@@ -2,7 +2,7 @@ import { MainLayout } from "@/components/MainLayout";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { API_URL } from "@/lib/api";
+import { apiPath } from "@/lib/api";
 import {
   BrainCircuit,
   Send,
@@ -118,7 +118,7 @@ export default function AiChatPage() {
     abortRef.current = new AbortController();
 
     try {
-      const res = await fetch(`${API_URL}/ai/chat/stream`, {
+      const res = await fetch(apiPath("/intelligence/chat"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -130,93 +130,50 @@ export default function AiChatPage() {
         signal: abortRef.current.signal,
       });
 
+      const payload: unknown = await res.json().catch(() => null);
+
       if (!res.ok) {
-        throw new Error("Stream request failed");
+        const errorMessage =
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as { error?: unknown }).error === "string"
+            ? (payload as { error: string }).error
+            : "Chat request failed";
+        throw new Error(errorMessage);
       }
 
-      if (!res.body) {
-        throw new Error("No response body");
+      const responseText =
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { response?: unknown }).response === "string"
+          ? (payload as { response: string }).response
+          : "No response from intelligence engine.";
+
+      const nextConversationId =
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { conversationId?: unknown }).conversationId ===
+          "string"
+          ? (payload as { conversationId: string }).conversationId
+          : null;
+
+      if (nextConversationId) {
+        setConversationId(nextConversationId);
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+      setMessages((prev) => {
+        const updated = [...prev];
 
-      let buffer = "";
-      let fullContent = "";
+        updated[updated.length - 1] = {
+          role: "ai",
+          content: responseText,
+          streaming: false,
+        };
 
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) break;
-
-        buffer += decoder.decode(value, {
-          stream: true,
-        });
-
-        const lines = buffer.split("\n");
-
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-
-          try {
-            const data = JSON.parse(line.slice(6));
-
-            if (data?.content) {
-              fullContent += data.content;
-
-              setMessages((prev) => {
-                const updated = [...prev];
-
-                updated[updated.length - 1] = {
-                  role: "ai",
-                  content: fullContent,
-                  streaming: true,
-                };
-
-                return updated;
-              });
-            }
-
-            if (data?.done) {
-              if (data?.conversationId) {
-                setConversationId(data.conversationId);
-              }
-
-              setMessages((prev) => {
-                const updated = [...prev];
-
-                updated[updated.length - 1] = {
-                  role: "ai",
-                  content: fullContent,
-                  streaming: false,
-                };
-
-                return updated;
-              });
-            }
-
-            if (data?.error) {
-              setMessages((prev) => {
-                const updated = [...prev];
-
-                updated[updated.length - 1] = {
-                  role: "ai",
-                  content: `Error: ${data.error}`,
-                  streaming: false,
-                };
-
-                return updated;
-              });
-            }
-          } catch (err) {
-            console.error("SSE Parse Error:", err);
-          }
-        }
-      }
+        return updated;
+      });
     } catch (err: unknown) {
-      console.error(err);
+      console.error("Intelligence chat request failed:", err);
 
       if (
         err instanceof Error &&
@@ -227,8 +184,7 @@ export default function AiChatPage() {
 
           updated[updated.length - 1] = {
             role: "ai",
-            content:
-              "Connection error. Please try again.",
+            content: err.message || "Connection error. Please try again.",
             streaming: false,
           };
 

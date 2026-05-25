@@ -1,5 +1,10 @@
 import { logger } from "./logger";
-import { groq, CHAT_MODEL, FAST_MODEL } from "./groq-client";
+import {
+  groq,
+  CHAT_MODEL,
+  FAST_MODEL,
+  isAiProviderConfigured,
+} from "./groq-client";
 
 interface IncidentContext {
   title?: string;
@@ -29,6 +34,50 @@ interface AnalysisResult {
 export async function generateRCA(
   context: IncidentContext
 ): Promise<AnalysisResult> {
+  if (!isAiProviderConfigured || !groq) {
+    logger.warn(
+      "GROQ_API_KEY missing; returning fallback RCA response"
+    );
+    return {
+      rootCause: `${
+        context?.title || "Unknown Incident"
+      } — automated analysis unavailable`,
+
+      whyItHappened:
+        context?.description ||
+        "No description available",
+
+      humanExplanation:
+        "An incident occurred affecting your services. Manual investigation is recommended.",
+
+      suggestedSolutions: [
+        "Check service logs",
+        "Review recent deployments",
+        "Verify resource limits",
+      ],
+
+      suggestedCommands: [
+        `kubectl get pods -n production | grep -v Running`,
+        `kubectl logs deployment/${
+          context?.affectedServices?.[0] ||
+          "api-gateway"
+        } -n production --since=30m`,
+      ],
+
+      confidence: 50,
+
+      severity:
+        context?.severity || "MEDIUM",
+
+      affectedServices:
+        context?.affectedServices || [
+          "api-gateway",
+        ],
+
+      insights: ["Manual review required"],
+    };
+  }
+
   logger.info(
     { title: context?.title || "Unknown Incident" },
     "Generating AI root cause analysis via Groq"
@@ -199,6 +248,20 @@ Be concise, technical, and actionable.`;
 
     { role: "user", content: message },
   ];
+
+  if (!isAiProviderConfigured || !groq) {
+    logger.warn(
+      "GROQ_API_KEY missing; returning fallback AI chat response"
+    );
+    return {
+      response:
+        "AI provider is not configured yet. Please set GROQ_API_KEY to enable live intelligence responses.",
+      suggestedPrompts: [
+        "Why did checkout fail?",
+        "Show failed pods",
+      ],
+    };
+  }
 
   try {
     const completion =

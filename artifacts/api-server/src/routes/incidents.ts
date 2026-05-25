@@ -1,336 +1,430 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, incidentsTable, timelineEventsTable } from "@workspace/db";
+import { pool } from "@workspace/db";
 import {
   ListIncidentsQueryParams,
   CreateIncidentBody,
   GetIncidentParams,
 } from "@workspace/api-zod";
 import { generateRCA } from "../lib/ai-analysis";
+import {
+  getFirstValue,
+  getTableColumns,
+  hasTable,
+  selectAllFromTable,
+  toIsoDateOrNull,
+  toNumberOrNull,
+  toStringArray,
+  toStringOrNull,
+} from "../lib/db-safe";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-async function seedDemoIncidents() {
-  const existing = await db.select().from(incidentsTable);
+const ENABLE_DEMO_SEED = process.env.ENABLE_DEMO_SEED === "true";
 
-  if (existing.length > 0) return;
+type NormalizedIncident = {
+  id: number;
+  title: string;
+  description: string;
+  severity: string;
+  status: string;
+  source: string | null;
+  affectedServices: string[];
+  rootCause: string | null;
+  aiAnalysis: string | null;
+  confidence: number | null;
+  suggestedCommands: string[];
+  createdAt: string | null;
+  updatedAt: string | null;
+  resolvedAt: string | null;
+};
 
-  await db.insert(incidentsTable).values([
-    {
-      title: "Payment API Latency Spike",
-      description:
-        "Latency exceeded threshold across payment services",
-      severity: "CRITICAL",
-      status: "INVESTIGATING",
-      source: "Prometheus",
-      confidence: 94,
-      affectedServices: [
-        "payments-api",
-        "postgres-db",
-      ],
-      suggestedCommands: [
-        "kubectl rollout restart deployment/payments-api",
-      ],
-    },
+function normalizeIncident(
+  row: Record<string, unknown>,
+): NormalizedIncident {
+  return {
+    id: toNumberOrNull(getFirstValue(row, ["id"])) ?? 0,
+    title: toStringOrNull(getFirstValue(row, ["title"])) ?? "Untitled Incident",
+    description:
+      toStringOrNull(getFirstValue(row, ["description"])) ??
+      "No description",
+    severity:
+      toStringOrNull(getFirstValue(row, ["severity"])) ?? "MEDIUM",
+    status: toStringOrNull(getFirstValue(row, ["status"])) ?? "OPEN",
+    source: toStringOrNull(getFirstValue(row, ["source"])),
+    affectedServices: toStringArray(
+      getFirstValue(row, ["affected_services", "affectedServices"]),
+    ),
+    rootCause: toStringOrNull(
+      getFirstValue(row, ["root_cause", "rootCause"]),
+    ),
+    aiAnalysis: toStringOrNull(
+      getFirstValue(row, ["ai_analysis", "aiAnalysis"]),
+    ),
+    confidence: toNumberOrNull(getFirstValue(row, ["confidence"])),
+    suggestedCommands: toStringArray(
+      getFirstValue(row, ["suggested_commands", "suggestedCommands"]),
+    ),
+    createdAt: toIsoDateOrNull(
+      getFirstValue(row, ["created_at", "createdAt"]),
+    ),
+    updatedAt: toIsoDateOrNull(
+      getFirstValue(row, ["updated_at", "updatedAt"]),
+    ),
+    resolvedAt: toIsoDateOrNull(
+      getFirstValue(row, ["resolved_at", "resolvedAt"]),
+    ),
+  };
+}
 
-    {
-      title: "Redis Cache Miss Storm",
-      description:
-        "High cache miss ratio detected",
-      severity: "HIGH",
-      status: "MONITORING",
-      source: "Grafana",
-      confidence: 87,
-      affectedServices: [
-        "redis-cache",
-        "session-service",
-      ],
-      suggestedCommands: [
-        "redis-cli info memory",
-      ],
-    },
+function normalizeTimelineEvent(row: Record<string, unknown>) {
+  return {
+    id: toNumberOrNull(getFirstValue(row, ["id"])) ?? 0,
+    incidentId:
+      toNumberOrNull(
+        getFirstValue(row, ["incident_id", "incidentId"]),
+      ) ?? 0,
+    timestamp: toIsoDateOrNull(getFirstValue(row, ["timestamp"])),
+    event:
+      toStringOrNull(getFirstValue(row, ["event"])) ??
+      "No event description",
+    type: toStringOrNull(getFirstValue(row, ["type"])) ?? "INFO",
+    service: toStringOrNull(getFirstValue(row, ["service"])),
+  };
+}
 
-    {
-      title: "Webhook Queue Saturation",
-      description:
-        "Webhook workers are delayed",
-      severity: "MEDIUM",
-      status: "IDENTIFIED",
-      source: "OpenTelemetry",
-      confidence: 76,
-      affectedServices: [
-        "webhook-worker",
-      ],
-      suggestedCommands: [
-        "pm2 restart webhook-worker",
-      ],
-    },
-  ]);
+async function insertIncident(
+  values: {
+    title: string;
+    description: string;
+    severity: string;
+    status?: string;
+    source?: string | null;
+    affectedServices?: string[];
+    suggestedCommands?: string[];
+  },
+): Promise<NormalizedIncident | null> {
+  const tableName = "incidents";
+  const tableExists = await hasTable(tableName);
+  if (!tableExists) {
+    return null;
+  }
+
+  const columns = await getTableColumns(tableName);
+  const entries: [string, unknown][] = [];
+
+  if (columns.has("title")) entries.push(["title", values.title]);
+  if (columns.has("description")) {
+    entries.push(["description", values.description]);
+  }
+  if (columns.has("severity")) entries.push(["severity", values.severity]);
+  if (columns.has("status")) entries.push(["status", values.status ?? "OPEN"]);
+  if (columns.has("source")) entries.push(["source", values.source ?? null]);
+  if (columns.has("affected_services")) {
+    entries.push(["affected_services", values.affectedServices ?? []]);
+  }
+  if (columns.has("suggested_commands")) {
+    entries.push(["suggested_commands", values.suggestedCommands ?? []]);
+  }
+  if (columns.has("created_at")) entries.push(["created_at", new Date()]);
+  if (columns.has("updated_at")) entries.push(["updated_at", new Date()]);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const columnSql = entries.map(([key]) => `"${key}"`).join(", ");
+  const valueSql = entries.map((_, i) => `$${i + 1}`).join(", ");
+  const queryValues = entries.map(([, value]) => value);
+
+  const result = await pool.query(
+    `insert into "${tableName}" (${columnSql})
+     values (${valueSql})
+     returning *`,
+    queryValues,
+  );
+
+  const [row] = result.rows as Record<string, unknown>[];
+  return row ? normalizeIncident(row) : null;
+}
+
+async function seedDemoIncidents(): Promise<void> {
+  if (!ENABLE_DEMO_SEED) {
+    return;
+  }
+
+  try {
+    const existing = await selectAllFromTable("incidents", "id");
+    if (existing.length > 0) return;
+
+    const seedRows = [
+      {
+        title: "Payment API Latency Spike",
+        description: "Latency exceeded threshold across payment services",
+        severity: "CRITICAL",
+        status: "INVESTIGATING",
+        source: "Prometheus",
+        affectedServices: ["payments-api", "postgres-db"],
+        suggestedCommands: [
+          "kubectl rollout restart deployment/payments-api",
+        ],
+      },
+      {
+        title: "Redis Cache Miss Storm",
+        description: "High cache miss ratio detected",
+        severity: "HIGH",
+        status: "MONITORING",
+        source: "Grafana",
+        affectedServices: ["redis-cache", "session-service"],
+        suggestedCommands: ["redis-cli info memory"],
+      },
+      {
+        title: "Webhook Queue Saturation",
+        description: "Webhook workers are delayed",
+        severity: "MEDIUM",
+        status: "IDENTIFIED",
+        source: "OpenTelemetry",
+        affectedServices: ["webhook-worker"],
+        suggestedCommands: ["pm2 restart webhook-worker"],
+      },
+    ];
+
+    for (const row of seedRows) {
+      await insertIncident(row);
+    }
+  } catch (err) {
+    logger.error({ err }, "Demo incident seed failed");
+  }
+}
+
+async function getSummaryResponse() {
+  await seedDemoIncidents();
+
+  const incidentRows = await selectAllFromTable("incidents", "id");
+  const incidents = incidentRows.map(normalizeIncident);
+
+  const critical = incidents.filter(
+    (i) =>
+      (i.severity === "CRITICAL" || i.severity === "HIGH") &&
+      i.status !== "RESOLVED" &&
+      i.status !== "CLOSED",
+  );
+
+  const incident = critical.length > 0 ? critical[0] : incidents[0];
+  if (!incident) {
+    return null;
+  }
+
+  let analysis;
+  try {
+    analysis = await generateRCA({
+      title: incident.title,
+      description: incident.description,
+      affectedServices: incident.affectedServices,
+      severity: incident.severity,
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to generate RCA for summary");
+    analysis = {
+      rootCause: "AI analysis unavailable",
+      whyItHappened: "Unable to generate detailed analysis at this time.",
+      humanExplanation: "The AI service is temporarily unavailable.",
+      suggestedSolutions: ["Inspect service logs", "Check recent deployments"],
+      suggestedCommands: ["kubectl get pods -A", "kubectl logs deployment/api-server"],
+      confidence: 50,
+      severity: incident.severity,
+      affectedServices: incident.affectedServices,
+      insights: ["Fallback analysis used"],
+    };
+  }
+
+  let timeline: ReturnType<typeof normalizeTimelineEvent>[] = [];
+  try {
+    const timelineRows = await selectAllFromTable("timeline_events", "id");
+    timeline = timelineRows
+      .map(normalizeTimelineEvent)
+      .filter((row) => row.incidentId === incident.id);
+  } catch (err) {
+    logger.error({ err }, "Failed to load timeline events for summary");
+  }
+
+  return { incident, analysis, timeline };
 }
 
 router.get("/incidents", async (req, res): Promise<void> => {
-  await seedDemoIncidents();
-
-  const query = ListIncidentsQueryParams.safeParse(req.query);
-
-  if (!query.success) {
-    res.status(400).json({
-      error: query?.error?.message || "Invalid query",
-    });
-
-    return;
-  }
-
-  const rows = await db.select().from(incidentsTable);
-
-  let filtered = rows || [];
-
-  if (query?.data?.status) {
-    filtered = filtered.filter(
-      (r) => r?.status === query.data.status
-    );
-  }
-
-  if (query?.data?.severity) {
-    filtered = filtered.filter(
-      (r) => r?.severity === query.data.severity
-    );
-  }
-
-  const limit = query?.data?.limit ?? 50;
-
-  const results = filtered.slice(0, limit);
-
-  res.json(
-    results.map((r) => ({
-      ...r,
-
-      affectedServices:
-        (r?.affectedServices as string[]) || [],
-
-      suggestedCommands:
-        (r?.suggestedCommands as string[]) || [],
-
-      createdAt:
-        r?.createdAt?.toISOString?.() || null,
-
-      updatedAt:
-        r?.updatedAt?.toISOString?.() || null,
-
-      resolvedAt:
-        r?.resolvedAt?.toISOString?.() || null,
-    }))
-  );
-});
-
-router.post("/incidents", async (req, res): Promise<void> => {
-  const parsed = CreateIncidentBody.safeParse(req.body);
-
-  if (!parsed.success) {
-    res.status(400).json({
-      error: parsed?.error?.message || "Invalid body",
-    });
-
-    return;
-  }
-
-  const [incident] = await db
-    .insert(incidentsTable)
-    .values({
-      title:
-        parsed?.data?.title ||
-        "Unknown Incident",
-
-      description:
-        parsed?.data?.description ||
-        "No description",
-
-      severity:
-        parsed?.data?.severity || "MEDIUM",
-
-      affectedServices:
-        parsed?.data?.affectedServices || [],
-
-      suggestedCommands: [],
-    })
-    .returning();
-
-  await db.insert(timelineEventsTable).values({
-    incidentId: incident?.id,
-
-    timestamp: new Date(),
-
-    event: "Incident detected and created",
-
-    type: "DETECTION",
-
-    service:
-      (parsed?.data?.affectedServices as string[])?.[0] ||
-      null,
-  });
-
-  res.status(201).json({
-    ...incident,
-
-    affectedServices:
-      (incident?.affectedServices as string[]) ||
-      [],
-
-    suggestedCommands:
-      (incident?.suggestedCommands as string[]) ||
-      [],
-
-    createdAt:
-      incident?.createdAt?.toISOString?.() || null,
-
-    updatedAt:
-      incident?.updatedAt?.toISOString?.() || null,
-
-    resolvedAt:
-      incident?.resolvedAt?.toISOString?.() || null,
-  });
-});
-
-router.get(
-  "/incidents/summary",
-  async (_req, res): Promise<void> => {
+  try {
     await seedDemoIncidents();
 
-    const incidents =
-      (await db.select().from(incidentsTable)) ||
-      [];
-
-    const critical = incidents.filter(
-      (i) =>
-        (i?.severity === "CRITICAL" ||
-          i?.severity === "HIGH") &&
-        i?.status !== "RESOLVED" &&
-        i?.status !== "CLOSED"
-    );
-
-    const incident =
-      critical.length > 0
-        ? critical[0]
-        : incidents[0];
-
-    if (!incident) {
-      res.status(404).json({
-        error: "No incidents found",
+    const query = ListIncidentsQueryParams.safeParse(req.query);
+    if (!query.success) {
+      res.status(400).json({
+        error: query.error.message || "Invalid query",
       });
-
       return;
     }
 
-    const analysis = await generateRCA({
-      title: incident?.title,
-      description: incident?.description,
+    const rows = await selectAllFromTable("incidents", "id");
+    let filtered = rows.map(normalizeIncident);
 
-      affectedServices:
-        (incident?.affectedServices as string[]) ||
-        [],
+    if (query.data.status) {
+      filtered = filtered.filter((r) => r.status === query.data.status);
+    }
 
-      severity:
-        incident?.severity || "MEDIUM",
-    });
+    if (query.data.severity) {
+      filtered = filtered.filter((r) => r.severity === query.data.severity);
+    }
 
-    const timeline = await db
-      .select()
-      .from(timelineEventsTable)
-      .then((rows) =>
-        rows.filter(
-          (r) => r?.incidentId === incident?.id
-        )
-      );
-
-    res.json({
-      incident: {
-        ...incident,
-
-        affectedServices:
-          (incident?.affectedServices as string[]) ||
-          [],
-
-        suggestedCommands:
-          (incident?.suggestedCommands as string[]) ||
-          [],
-
-        createdAt:
-          incident?.createdAt?.toISOString?.() ||
-          null,
-
-        updatedAt:
-          incident?.updatedAt?.toISOString?.() ||
-          null,
-
-        resolvedAt:
-          incident?.resolvedAt?.toISOString?.() ||
-          null,
-      },
-
-      analysis,
-
-      timeline: timeline.map((t) => ({
-        ...t,
-
-        timestamp:
-          t?.timestamp?.toISOString?.() || null,
-      })),
+    const limit = query.data.limit ?? 50;
+    res.json(filtered.slice(0, limit));
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch incidents");
+    res.status(500).json({
+      error: "Failed to load incidents",
     });
   }
-);
+});
 
-router.get("/incidents/:id", async (req, res) => {
-  const params = GetIncidentParams.safeParse(
-    req.params
-  );
+router.post("/incidents", async (req, res): Promise<void> => {
+  try {
+    const parsed = CreateIncidentBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.message || "Invalid body",
+      });
+      return;
+    }
 
-  if (!params.success) {
-    res.status(400).json({
-      error: params?.error?.message,
+    const incident = await insertIncident({
+      title: parsed.data.title || "Unknown Incident",
+      description: parsed.data.description || "No description",
+      severity: parsed.data.severity || "MEDIUM",
+      affectedServices: parsed.data.affectedServices || [],
+      suggestedCommands: [],
     });
 
-    return;
-  }
+    if (!incident) {
+      res.status(500).json({
+        error: "Failed to create incident",
+      });
+      return;
+    }
 
-  const raw = Array.isArray(req?.params?.id)
-    ? req.params.id[0]
-    : req?.params?.id;
+    try {
+      const timelineExists = await hasTable("timeline_events");
+      if (timelineExists) {
+        const timelineColumns = await getTableColumns("timeline_events");
+        const timelineEntries: [string, unknown][] = [];
+        if (timelineColumns.has("incident_id")) {
+          timelineEntries.push(["incident_id", incident.id]);
+        }
+        if (timelineColumns.has("timestamp")) {
+          timelineEntries.push(["timestamp", new Date()]);
+        }
+        if (timelineColumns.has("event")) {
+          timelineEntries.push(["event", "Incident detected and created"]);
+        }
+        if (timelineColumns.has("type")) {
+          timelineEntries.push(["type", "DETECTION"]);
+        }
+        if (timelineColumns.has("service")) {
+          timelineEntries.push([
+            "service",
+            parsed.data.affectedServices?.[0] ?? null,
+          ]);
+        }
 
-  const id = parseInt(raw || "0", 10);
+        if (timelineEntries.length > 0) {
+          const colSql = timelineEntries.map(([col]) => `"${col}"`).join(", ");
+          const valSql = timelineEntries.map((_, i) => `$${i + 1}`).join(", ");
+          await pool.query(
+            `insert into "timeline_events" (${colSql}) values (${valSql})`,
+            timelineEntries.map(([, value]) => value),
+          );
+        }
+      }
+    } catch (err) {
+      logger.error({ err, incidentId: incident.id }, "Failed to create timeline event");
+    }
 
-  const [incident] = await db
-    .select()
-    .from(incidentsTable)
-    .where(eq(incidentsTable.id, id));
-
-  if (!incident) {
-    res.status(404).json({
-      error: "Incident not found",
+    res.status(201).json(incident);
+  } catch (err) {
+    logger.error({ err }, "Failed to create incident");
+    res.status(500).json({
+      error: "Failed to create incident",
     });
-
-    return;
   }
+});
 
-  res.json({
-    ...incident,
+router.get("/incidents/summary", async (_req, res): Promise<void> => {
+  try {
+    const summary = await getSummaryResponse();
+    if (!summary) {
+      res.status(404).json({
+        error: "No incidents found",
+      });
+      return;
+    }
+    res.json(summary);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch incident summary");
+    res.status(500).json({
+      error: "Failed to load incident summary",
+    });
+  }
+});
 
-    affectedServices:
-      (incident?.affectedServices as string[]) ||
-      [],
+router.get("/dashboard/summary", async (_req, res): Promise<void> => {
+  try {
+    const summary = await getSummaryResponse();
+    if (!summary) {
+      res.status(404).json({
+        error: "No incidents found",
+      });
+      return;
+    }
+    res.json(summary);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch dashboard summary");
+    res.status(500).json({
+      error: "Failed to load dashboard summary",
+    });
+  }
+});
 
-    suggestedCommands:
-      (incident?.suggestedCommands as string[]) ||
-      [],
+router.get("/incidents/:id", async (req, res): Promise<void> => {
+  try {
+    const params = GetIncidentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({
+        error: params.error.message,
+      });
+      return;
+    }
 
-    createdAt:
-      incident?.createdAt?.toISOString?.() || null,
+    const raw = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const id = parseInt(raw || "0", 10);
 
-    updatedAt:
-      incident?.updatedAt?.toISOString?.() || null,
+    const rows = await selectAllFromTable("incidents", "id");
+    const incident = rows
+      .map(normalizeIncident)
+      .find((r) => r.id === id);
 
-    resolvedAt:
-      incident?.resolvedAt?.toISOString?.() || null,
-  });
+    if (!incident) {
+      res.status(404).json({
+        error: "Incident not found",
+      });
+      return;
+    }
+
+    res.json(incident);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch incident by id");
+    res.status(500).json({
+      error: "Failed to load incident",
+    });
+  }
 });
 
 export default router;
